@@ -15,7 +15,6 @@
 static IONotificationPortRef gNotifyPort = NULL;
 static io_iterator_t gAddedIter = 0;
 static CGPoint point0 = {0, 0};
-static char first_interrupt = 1;
 
 /* */
 typedef enum CalibrationState {
@@ -210,33 +209,36 @@ void device_release (void *refCon, io_service_t service, natural_t messageType,
 }
 
 void interrupt_callback (void *target, IOReturn result, void *refcon,
-						 void *sender, uint32_t bufferSize) {
+                         void *sender, uint32_t bufferSize) {
+    static int interrupt_counter = 0;
     HIDDataRef hidDataRef = (HIDDataRef) refcon;
-	char hw_x, hw_y; /* hardware coordinates received from mouse */
-    CGEventRef event;
-	CGPoint point;
-	int sw_x, sw_y; /* software coordinates */
-	
-	if ( !hidDataRef )
+    char hw_x = SCHAR_MAX, hw_y = SCHAR_MAX; /* hardware coordinates, received from mouse */
+    int sw_x = INT_MAX, sw_y = INT_MAX;      /* software coordinates, grabbed from system mouse location */
+
+    if (!hidDataRef) {
         return;
-	if (bufferSize < 4)
-		return;
-	
-	hw_x = (char) hidDataRef->buffer[1];
-	hw_y = (char) hidDataRef->buffer[2];
-	
-	event = CGEventCreate (NULL);
-	point = CGEventGetLocation(event);
-	
-	sw_x = point.x - point0.x;
-	sw_y = point.y - point0.y;
-	
-	if (!first_interrupt) {
-		printf("hw: %3i  x %3i         sw: %3i  x %3i\n", hw_x, hw_y, sw_x, sw_y);
-	} else {
-		first_interrupt = 0;
-	}
-	
-	point0.x = point.x;
-	point0.y = point.y;
+    }
+
+    if (bufferSize < 4) {
+        return;
+    }
+
+    CGEventRef event = CGEventCreate (NULL);
+    CGPoint point = CGEventGetLocation(event);
+
+    sw_x = point.x - point0.x;
+    sw_y = point.y - point0.y;
+    point0.x = point.x;
+    point0.y = point.y;
+
+    if (interrupt_counter > 0) {
+        printf("         sw: %3i  x %3i\n", sw_x, sw_y);
+    }
+
+    hw_x = (char) hidDataRef->buffer[1];
+    hw_y = (char) hidDataRef->buffer[2];
+
+    printf("hw: %3i  x %3i", hw_x, hw_y);
+
+    interrupt_counter++;
 }
